@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
+import { useTheme } from '@/lib/theme-context';
 
 interface NavbarProps {
   title?: string;
@@ -9,7 +10,8 @@ interface NavbarProps {
 }
 
 export default function Navbar({ title, showBack = true }: NavbarProps) {
-  const { user, profile, isGuest, signOut } = useAuth();
+  const { user, profile, isGuest } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <nav className="navbar">
@@ -75,6 +77,17 @@ export default function Navbar({ title, showBack = true }: NavbarProps) {
               <span style={{ color: 'var(--color-text-muted)' }}>(1200)</span>
             </div>
           )}
+
+          {/* Theme Toggle */}
+          <button
+            id="btn-theme-toggle"
+            onClick={toggleTheme}
+            className="theme-toggle"
+            aria-label={theme === 'dark' ? 'Beralih ke tema terang' : 'Beralih ke tema gelap'}
+            title={theme === 'dark' ? 'Tema Terang' : 'Tema Gelap'}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
 
           {showBack && (
             <Link href="/" className="btn btn-secondary btn-sm" id="btn-back-home" style={{ padding: '6px 12px', fontSize: '0.85rem' }}>

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { useTheme } from '@/lib/theme-context';
 import { supabase } from '@/lib/supabase';
 
 interface AuthModalProps {
@@ -10,6 +11,7 @@ interface AuthModalProps {
 
 export default function AuthModal({ isOpen }: AuthModalProps) {
   const { loginAsGuest } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [isLoginTab, setIsLoginTab] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,6 +19,8 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
 
   if (!isOpen) return null;
 
@@ -78,6 +82,17 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
   return (
     <div className="modal-overlay">
       <div className="modal-content" style={{ maxWidth: '420px', position: 'relative' }}>
+        {/* Theme toggle in modal corner */}
+        <button
+          id="btn-auth-theme-toggle"
+          onClick={toggleTheme}
+          className="theme-toggle"
+          aria-label={theme === 'dark' ? 'Beralih ke tema terang' : 'Beralih ke tema gelap'}
+          style={{ position: 'absolute', top: '1rem', right: '1rem' }}
+        >
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
+
         <div className="text-center" style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.75rem', marginBottom: '0.5rem' }}>♟ CaturKita</h2>
           <p style={{ fontSize: '0.875rem' }}>
@@ -98,6 +113,7 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
               setIsLoginTab(true);
               setError(null);
               setSuccessMsg(null);
+              setShowPassword(false);
             }}
             style={{
               flex: 1,
@@ -117,6 +133,7 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
               setIsLoginTab(false);
               setError(null);
               setSuccessMsg(null);
+              setShowPassword(false);
             }}
             style={{
               flex: 1,
@@ -192,14 +209,26 @@ export default function AuthModal({ isOpen }: AuthModalProps) {
 
           <div className="flex flex-col gap-1">
             <label style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Password</label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <div className="password-wrapper">
+              <input
+                id="input-password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                tabIndex={-1}
+              >
+                {showPassword ? '🙈' : '👁'}
+              </button>
+            </div>
           </div>
 
           <button

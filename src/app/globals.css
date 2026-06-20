@@ -69,6 +69,44 @@
 }
 
 /* ===========================
+   LIGHT THEME OVERRIDES
+   =========================== */
+[data-theme="light"] {
+  --color-bg-primary: #f4f5fb;
+  --color-bg-secondary: #e8eaf4;
+  --color-bg-card: #ffffff;
+  --color-bg-card-hover: #f0f2ff;
+  --color-bg-elevated: #eceef8;
+
+  --color-accent-primary: #6457e8;
+  --color-accent-secondary: #4c42c4;
+  --color-accent-glow: rgba(100, 87, 232, 0.15);
+  --color-accent-gold: #c9920a;
+  --color-accent-gold-glow: rgba(201, 146, 10, 0.2);
+
+  --color-success: #1a9e6b;
+  --color-danger: #d63838;
+  --color-warning: #c47d00;
+  --color-info: #2563eb;
+
+  --color-text-primary: #1a1c2e;
+  --color-text-secondary: #4a5080;
+  --color-text-muted: #8890b5;
+
+  --color-border: rgba(0, 0, 0, 0.09);
+  --color-border-strong: rgba(0, 0, 0, 0.15);
+
+  --board-light: #f0d9b5;
+  --board-dark: #b58863;
+
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.10);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.18);
+  --shadow-glow-accent: 0 0 24px rgba(100, 87, 232, 0.18);
+  --shadow-glow-gold: 0 0 24px rgba(201, 146, 10, 0.15);
+}
+
+/* ===========================
    GLOBAL RESET & BASE
    =========================== */
 *,
@@ -262,6 +300,66 @@ a:hover { color: var(--color-text-primary); }
 }
 
 /* ===========================
+   THEME TOGGLE BUTTON
+   =========================== */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  background: var(--color-accent-glow);
+  border-color: var(--color-accent-primary);
+  color: var(--color-accent-primary);
+  transform: rotate(20deg) scale(1.05);
+}
+
+/* ===========================
+   PASSWORD TOGGLE WRAPPER
+   =========================== */
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-wrapper .input {
+  padding-right: 2.75rem;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.password-toggle:hover {
+  color: var(--color-accent-primary);
+}
+
+/* ===========================
    BADGE / CHIP
    =========================== */
 .badge {
@@ -417,6 +515,10 @@ a:hover { color: var(--color-text-primary); }
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--color-border);
   padding: var(--space-3) 0;
+}
+
+[data-theme="light"] .navbar {
+  background: rgba(244, 245, 251, 0.88);
 }
 
 .navbar-inner {
