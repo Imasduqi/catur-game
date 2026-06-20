@@ -178,6 +178,7 @@ function VsKomputerPageInner() {
   const handlePieceDrop = useCallback(
     ({ piece, sourceSquare, targetSquare }: { piece: any; sourceSquare: string; targetSquare: string | null }): boolean => {
       console.log('handlePieceDrop triggered', { piece, sourceSquare, targetSquare, turn: chess.turn(), playerColor, status });
+      setSelectedSquare(null);
       if (!targetSquare) return false;
       if (status !== 'playing') return false;
       if (chess.turn() !== playerColor) return false;
@@ -211,6 +212,28 @@ function VsKomputerPageInner() {
 
   // Tap/click support (for mobile and keyboard users)
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+
+  // Valid move squares for the selected piece
+  const validMoveSquares: Record<string, { isCapture: boolean }> = {};
+  if (selectedSquare && status === 'playing' && chess.turn() === playerColor) {
+    const moves = chess.moves({ square: selectedSquare, verbose: true }) as Move[];
+    moves.forEach((m) => {
+      validMoveSquares[m.to] = { isCapture: !!(m.flags.includes('c') || m.flags.includes('e')) };
+    });
+  }
+
+  // Handle drag begin: select the dragged piece to show valid moves
+  const handlePieceDrag = useCallback(
+    ({ square }: { isSparePiece: boolean; piece: any; square: string | null }) => {
+      if (!square) return;
+      if (status !== 'playing' || chess.turn() !== playerColor) return;
+      const piece = chess.get(square as Square);
+      if (piece && piece.color === playerColor) {
+        setSelectedSquare(square as Square);
+      }
+    },
+    [chess, playerColor, status]
+  );
 
   const handleSquareClick = useCallback(
     ({ square, piece }: { piece: any; square: string }) => {
@@ -325,7 +348,7 @@ function VsKomputerPageInner() {
     startNewGame();
   };
 
-  // Square styles: highlight last move, check, and selected square
+  // Square styles: highlight last move, check, selected square, and valid move targets
   const squareStyles: Record<string, React.CSSProperties> = {};
   if (lastMove) {
     squareStyles[lastMove.from] = { background: 'rgba(124, 106, 247, 0.35)' };
@@ -340,6 +363,27 @@ function VsKomputerPageInner() {
   if (selectedSquare) {
     squareStyles[selectedSquare] = { background: 'rgba(124, 106, 247, 0.7)' };
   }
+  // Valid move target highlights
+  Object.entries(validMoveSquares).forEach(([sq, { isCapture }]) => {
+    if (isCapture) {
+      // Enemy piece that can be captured — ring overlay
+      squareStyles[sq] = {
+        ...squareStyles[sq],
+        boxSizing: 'border-box',
+        border: '4px solid rgba(220, 80, 80, 0.85)',
+        borderRadius: '2px',
+        background: squareStyles[sq]?.background || 'radial-gradient(circle, rgba(220,80,80,0.18) 0%, transparent 80%)',
+      } as React.CSSProperties;
+    } else {
+      // Empty square — subtle dot in center
+      squareStyles[sq] = {
+        ...squareStyles[sq],
+        background: squareStyles[sq]?.background
+          ? `radial-gradient(circle, rgba(124,106,247,0.55) 22%, transparent 23%), ${squareStyles[sq].background}`
+          : 'radial-gradient(circle, rgba(124,106,247,0.55) 22%, transparent 23%)',
+      } as React.CSSProperties;
+    }
+  });
 
   const computerColor: PieceColor = playerColor === 'w' ? 'b' : 'w';
   const opponentLabel = isMainPublikFallback
@@ -396,6 +440,7 @@ function VsKomputerPageInner() {
                 position: fen,
                 boardOrientation,
                 onPieceDrop: handlePieceDrop,
+                onPieceDrag: handlePieceDrag,
                 onSquareClick: handleSquareClick,
                 squareStyles,
                 boardStyle: {

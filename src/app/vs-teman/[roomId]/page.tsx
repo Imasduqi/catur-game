@@ -484,6 +484,7 @@ export default function RoomPage() {
   // react-chessboard v5: onPieceDrop receives an object
   const handlePieceDrop = useCallback(
     ({ sourceSquare, targetSquare }: { piece: any; sourceSquare: string; targetSquare: string | null }): boolean => {
+      setSelectedSquare(null);
       if (!targetSquare) return false;
       if (status !== 'playing' || opponentDisconnected) return false;
       if (!myColor || chess.turn() !== myColor) return false;
@@ -518,6 +519,29 @@ export default function RoomPage() {
 
   // Tap/click support
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+
+  // Valid move squares for the selected piece
+  const validMoveSquares: Record<string, { isCapture: boolean }> = {};
+  if (selectedSquare && status === 'playing' && myColor && chess.turn() === myColor) {
+    const moves = chess.moves({ square: selectedSquare, verbose: true }) as any[];
+    moves.forEach((m: any) => {
+      validMoveSquares[m.to] = { isCapture: !!(m.flags.includes('c') || m.flags.includes('e')) };
+    });
+  }
+
+  // Handle drag begin: select the dragged piece to show valid moves
+  const handlePieceDrag = useCallback(
+    ({ square }: { isSparePiece: boolean; piece: any; square: string | null }) => {
+      if (!square) return;
+      if (status !== 'playing' || opponentDisconnected) return;
+      if (!myColor || chess.turn() !== myColor) return;
+      const piece = chess.get(square as Square);
+      if (piece && piece.color === myColor) {
+        setSelectedSquare(square as Square);
+      }
+    },
+    [chess, myColor, status, opponentDisconnected]
+  );
 
   const handleSquareClick = useCallback(
     ({ square }: { piece: any; square: string }) => {
@@ -631,6 +655,27 @@ export default function RoomPage() {
   if (selectedSquare) {
     squareStyles[selectedSquare] = { background: 'rgba(124, 106, 247, 0.7)' };
   }
+  // Valid move target highlights
+  Object.entries(validMoveSquares).forEach(([sq, { isCapture }]) => {
+    if (isCapture) {
+      squareStyles[sq] = {
+        ...squareStyles[sq],
+        boxSizing: 'border-box',
+        border: '4px solid rgba(220, 80, 80, 0.85)',
+        borderRadius: '2px',
+        background: squareStyles[sq]?.background
+          ? squareStyles[sq].background
+          : 'radial-gradient(circle, rgba(220,80,80,0.18) 0%, transparent 80%)',
+      } as React.CSSProperties;
+    } else {
+      squareStyles[sq] = {
+        ...squareStyles[sq],
+        background: squareStyles[sq]?.background
+          ? `radial-gradient(circle, rgba(124,106,247,0.55) 22%, transparent 23%), ${squareStyles[sq].background}`
+          : 'radial-gradient(circle, rgba(124,106,247,0.55) 22%, transparent 23%)',
+      } as React.CSSProperties;
+    }
+  });
 
   const isMyTurn = myColor && chess.turn() === myColor && status === 'playing';
   const opponentColor: PieceColor | null = myColor ? (myColor === 'w' ? 'b' : 'w') : null;
@@ -787,6 +832,7 @@ export default function RoomPage() {
                   position: fen,
                   boardOrientation,
                   onPieceDrop: handlePieceDrop,
+                  onPieceDrag: handlePieceDrag,
                   onSquareClick: handleSquareClick,
                   squareStyles,
                   boardStyle: {
