@@ -10,6 +10,7 @@ interface GameOverModalProps {
   onGoHome: () => void;
   isOpen: boolean;
   onClose: () => void;
+  ratingChange?: number | null; // rating change feedback
 }
 
 function getResultInfo(
@@ -64,6 +65,7 @@ export default function GameOverModal({
   onGoHome,
   isOpen,
   onClose,
+  ratingChange = null,
 }: GameOverModalProps) {
   if (!isOpen) return null;
 
@@ -95,7 +97,25 @@ export default function GameOverModal({
         <span className="game-over-icon" role="img" aria-label={title}>
           {icon}
         </span>
-        <h2 className="game-over-title">{title}</h2>
+        <h2 className="game-over-title" style={{ marginBottom: ratingChange !== null ? '0.5rem' : '1.5rem' }}>{title}</h2>
+        
+        {ratingChange !== null && (
+          <div
+            style={{
+              fontSize: '1.25rem',
+              fontWeight: 700,
+              color: ratingChange >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
+              marginBottom: '1.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.25rem',
+            }}
+          >
+            {ratingChange >= 0 ? `+${ratingChange}` : ratingChange} Rating Elo
+          </div>
+        )}
+
         {subtitle && (
           <p
             style={{

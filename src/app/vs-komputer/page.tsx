@@ -1,9 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Chess, Move, Square } from 'chess.js';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '@/lib/auth-context';
+import { supabase } from '@/lib/supabase';
 
 const Chessboard = dynamic(
   () => import('react-chessboard').then((mod) => mod.Chessboard),
@@ -20,8 +22,13 @@ import { Difficulty, GameStatus, PieceColor, PromotionPiece } from '@/types/ches
 
 type PendingPromotion = { from: Square; to: Square };
 
-export default function VsKomputerPage() {
+function VsKomputerPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
+
+  const [fallbackElo, setFallbackElo] = useState<number | null>(null);
+  const [isMainPublikFallback, setIsMainPublikFallback] = useState(false);
 
   // Game state
   const [chess] = useState(() => new Chess());
@@ -34,23 +41,25 @@ export default function VsKomputerPage() {
 
   const [showGameOverModal, setShowGameOverModal] = useState(false);
 
-  useEffect(() => {
-    const isOver =
-      status === 'checkmate' ||
-      status === 'draw' ||
-      status === 'stalemate' ||
-      status === 'resigned';
-    if (isOver) {
-      setShowGameOverModal(true);
-    } else {
-      setShowGameOverModal(false);
-    }
-  }, [status]);
+  const hasSavedGame = useRef(false);
+
+
 
   // Settings
   const [playerColor, setPlayerColor] = useState<PieceColor>('w');
   const [difficulty, setDifficulty] = useState<Difficulty>('sedang');
   const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white');
+
+  useEffect(() => {
+    const modeParam = searchParams?.get('mode');
+    const eloParam = searchParams?.get('elo');
+    if (modeParam === 'main_publik') {
+      setIsMainPublikFallback(true);
+      const eloVal = eloParam ? parseInt(eloParam, 10) : 1200;
+      setFallbackElo(eloVal);
+      setPlayerColor(Math.random() < 0.5 ? 'w' : 'b');
+    }
+  }, [searchParams]);
 
   // Promotion
   const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
@@ -59,7 +68,47 @@ export default function VsKomputerPage() {
   const { isReady: sfReady, isThinking, getBestMove, startNewGame } = useStockfish({
     difficulty,
     enabled: true,
+    elo: fallbackElo,
   });
+
+  useEffect(() => {
+    const isOver =
+      status === 'checkmate' ||
+      status === 'draw' ||
+      status === 'stalemate' ||
+      status === 'resigned';
+    if (isOver) {
+      setShowGameOverModal(true);
+
+      if (user && !hasSavedGame.current) {
+        hasSavedGame.current = true;
+        
+        let resultVal: 'menang' | 'kalah' | 'seri' = 'seri';
+        if (winner === 'draw' || status === 'stalemate' || status === 'draw') {
+          resultVal = 'seri';
+        } else if (winner === playerColor) {
+          resultVal = 'menang';
+        } else {
+          resultVal = 'kalah';
+        }
+
+        const opponentLabelVal = isMainPublikFallback
+          ? `Komputer (Elo ${fallbackElo || 1200} - Main Publik)`
+          : `Komputer (${difficulty === 'mudah' ? 'Mudah' : difficulty === 'sedang' ? 'Sedang' : 'Sulit'})`;
+
+        supabase.rpc('record_game', {
+          p_mode: 'vs_komputer',
+          p_result: resultVal,
+          p_opponent_id: null,
+          p_opponent_name: opponentLabelVal
+        }).then(({ error }) => {
+          if (error) console.error('Error saving PvE game:', error);
+        });
+      }
+    } else {
+      setShowGameOverModal(false);
+    }
+  }, [status, winner, playerColor, user, isMainPublikFallback, fallbackElo, difficulty]);
 
   // Start new game in engine when ready
   useEffect(() => {
@@ -255,6 +304,7 @@ export default function VsKomputerPage() {
     setLastMove(null);
     setIsInCheck(false);
     setPendingPromotion(null);
+    hasSavedGame.current = false;
     startNewGame();
   }, [chess, startNewGame]);
 
@@ -271,6 +321,7 @@ export default function VsKomputerPage() {
     setWinner(null);
     setLastMove(null);
     setIsInCheck(false);
+    hasSavedGame.current = false;
     startNewGame();
   };
 
@@ -291,10 +342,13 @@ export default function VsKomputerPage() {
   }
 
   const computerColor: PieceColor = playerColor === 'w' ? 'b' : 'w';
+  const opponentLabel = isMainPublikFallback
+    ? `Komputer (Elo ${fallbackElo || 1200})`
+    : `Komputer (${difficulty === 'mudah' ? 'Mudah' : difficulty === 'sedang' ? 'Sedang' : 'Sulit'})`;
 
   return (
     <>
-      <Navbar title="vs Komputer" />
+      <Navbar title={isMainPublikFallback ? "vs Komputer (Fallback)" : "vs Komputer"} />
 
       <div className="game-layout">
         {/* Board area */}
@@ -302,7 +356,7 @@ export default function VsKomputerPage() {
           {/* Opponent (Computer) info */}
           <div className={`player-info ${!isPlayerTurn && status === 'playing' ? 'active' : ''}`}>
             <div className={`player-avatar ${computerColor}`}>🤖</div>
-            <span className="player-name">Komputer</span>
+            <span className="player-name">{opponentLabel}</span>
             {isThinking && (
               <div className="thinking-dots" aria-label="Komputer sedang berpikir">
                 <span /><span /><span />
@@ -378,42 +432,46 @@ export default function VsKomputerPage() {
         {/* Sidebar */}
         <aside className="sidebar">
           {/* Difficulty */}
-          <div className="card">
-            <DifficultySelector
-              value={difficulty}
-              onChange={setDifficulty}
-              disabled={status !== 'playing' || moveHistory.length > 0}
-            />
-          </div>
+          {!isMainPublikFallback && (
+            <div className="card">
+              <DifficultySelector
+                value={difficulty}
+                onChange={setDifficulty}
+                disabled={status !== 'playing' || moveHistory.length > 0}
+              />
+            </div>
+          )}
 
           {/* Color selector */}
-          <div className="card">
-            <p
-              style={{
-                fontSize: '0.78rem',
-                color: 'var(--color-text-muted)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                fontWeight: 600,
-                marginBottom: '0.75rem',
-              }}
-            >
-              Main sebagai
-            </p>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              {(['w', 'b'] as PieceColor[]).map((c) => (
-                <button
-                  key={c}
-                  onClick={() => handleColorChange(c)}
-                  className={`btn ${playerColor === c ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ flex: 1, fontSize: '0.85rem' }}
-                  id={`btn-color-${c}`}
-                >
-                  {c === 'w' ? '♔ Putih' : '♚ Hitam'}
-                </button>
-              ))}
+          {!isMainPublikFallback && (
+            <div className="card">
+              <p
+                style={{
+                  fontSize: '0.78rem',
+                  color: 'var(--color-text-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  fontWeight: 600,
+                  marginBottom: '0.75rem',
+                }}
+              >
+                Main sebagai
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {(['w', 'b'] as PieceColor[]).map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => handleColorChange(c)}
+                    className={`btn ${playerColor === c ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1, fontSize: '0.85rem' }}
+                    id={`btn-color-${c}`}
+                  >
+                    {c === 'w' ? '♔ Putih' : '♚ Hitam'}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Move history */}
           <div className="card">
@@ -475,6 +533,20 @@ export default function VsKomputerPage() {
         onClose={() => setShowGameOverModal(false)}
       />
     </>
+  );
+}
+
+export default function VsKomputerPage() {
+  return (
+    <Suspense fallback={
+      <div className="home-hero flex justify-center items-center" style={{ height: '100vh', backgroundColor: 'var(--color-bg-primary)' }}>
+        <div style={{ textAlign: 'center' }}>
+          <h2 style={{ color: 'var(--color-text-primary)' }}>♟ Memuat...</h2>
+        </div>
+      </div>
+    }>
+      <VsKomputerPageInner />
+    </Suspense>
   );
 }
 

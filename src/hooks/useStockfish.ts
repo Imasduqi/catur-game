@@ -6,9 +6,10 @@ import { getStockfishEngine, destroyStockfishEngine } from '@/lib/stockfish';
 interface UseStockfishProps {
   difficulty: Difficulty;
   enabled: boolean;
+  elo?: number | null;
 }
 
-export function useStockfish({ difficulty, enabled }: UseStockfishProps) {
+export function useStockfish({ difficulty, enabled, elo = null }: UseStockfishProps) {
   const [isReady, setIsReady] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const engineRef = useRef(getStockfishEngine());
@@ -33,10 +34,10 @@ export function useStockfish({ difficulty, enabled }: UseStockfishProps) {
         engineRef.current.findBestMove(fen, difficulty, (bestMove) => {
           setIsThinking(false);
           resolve(bestMove);
-        });
+        }, elo);
       });
     },
-    [difficulty]
+    [difficulty, elo]
   );
 
   const startNewGame = useCallback(() => {

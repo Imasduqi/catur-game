@@ -17,13 +17,20 @@ import GameOverModal from '@/components/GameOverModal';
 import { supabase } from '@/lib/supabase';
 import { useTimer } from '@/hooks/useTimer';
 import { GameStatus, PieceColor, PromotionPiece, RealtimeMove } from '@/types/chess';
+import { useAuth } from '@/lib/auth-context';
 
 type PendingPromotion = { from: Square; to: Square };
 
 export default function RoomPage() {
+  const { user, profile } = useAuth();
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  const [opponentId, setOpponentId] = useState<string | null>(null);
+  const [opponentName, setOpponentName] = useState<string>('Lawan');
+  const [opponentElo, setOpponentElo] = useState<number>(1200);
+  const [ratingChange, setRatingChange] = useState<number | null>(null);
 
   const roomId = (params?.roomId as string) ?? '';
   const isHost = searchParams?.get('host') === '1';
@@ -98,6 +105,8 @@ export default function RoomPage() {
 
   const [showGameOverModal, setShowGameOverModal] = useState(false);
 
+  const hasSavedGame = useRef(false);
+
   useEffect(() => {
     const isOver =
       status === 'checkmate' ||
@@ -106,10 +115,41 @@ export default function RoomPage() {
       status === 'resigned';
     if (isOver) {
       setShowGameOverModal(true);
+
+      // Save game history securely on server-side if logged in
+      if (user && !hasSavedGame.current && myColor) {
+        hasSavedGame.current = true;
+        
+        const modeParam = searchParams?.get('mode') ?? 'vs_teman';
+        
+        let resultVal: 'menang' | 'kalah' | 'seri' = 'seri';
+        if (winner === 'draw' || status === 'stalemate' || status === 'draw') {
+          resultVal = 'seri';
+        } else if (winner === myColor) {
+          resultVal = 'menang';
+        } else {
+          resultVal = 'kalah';
+        }
+
+        supabase.rpc('record_game', {
+          p_mode: modeParam,
+          p_result: resultVal,
+          p_opponent_id: opponentId,
+          p_opponent_name: opponentName === 'Lawan' ? (modeParam === 'main_publik' ? 'Tamu' : 'Lawan') : opponentName,
+          p_opponent_elo_fallback: opponentElo || 1200
+        }).then(({ data, error }) => {
+          if (error) {
+            console.error('Error recording game:', error);
+          } else if (data && data[0]) {
+            const ratingChangeVal = data[0].calculated_rating_change;
+            setRatingChange(ratingChangeVal);
+          }
+        });
+      }
     } else {
       setShowGameOverModal(false);
     }
-  }, [status]);
+  }, [status, winner, myColor, opponentId, opponentName, opponentElo, user, searchParams]);
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -307,10 +347,10 @@ export default function RoomPage() {
       })
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState();
-        const presences = Object.values(state).flat() as unknown as { clientId: string; role: string; joinedAt: number }[];
+        const presences = Object.values(state).flat() as any[];
 
         // Group presences by clientId and keep the earliest joinedAt for each unique client
-        const uniqueClientsMap = new Map<string, { clientId: string; role: string; joinedAt: number }>();
+        const uniqueClientsMap = new Map<string, any>();
         presences.forEach((p) => {
           const existing = uniqueClientsMap.get(p.clientId);
           if (!existing || p.joinedAt < existing.joinedAt) {
@@ -334,20 +374,32 @@ export default function RoomPage() {
         }
 
         // 3. Opponent disconnect detection (playing only)
+        const opponentRole = isHost ? 'guest' : 'host';
         if (statusRef.current === 'playing') {
-          const opponentRole = isHost ? 'guest' : 'host';
           const isOpponentPresent = uniquePresences.some((p) => p.role === opponentRole);
           setOpponentDisconnected(!isOpponentPresent);
+        }
+
+        // Get opponent profile information from Presence
+        const opponentPresence = uniquePresences.find((p) => p.role === opponentRole);
+        if (opponentPresence) {
+          if (opponentPresence.userId) setOpponentId(opponentPresence.userId);
+          if (opponentPresence.username) setOpponentName(opponentPresence.username);
+          if (opponentPresence.rating) setOpponentElo(opponentPresence.rating);
+          setOpponentJoined(true);
         }
       })
       .subscribe(async (subStatus) => {
         if (subStatus === 'SUBSCRIBED') {
           setIsRealtimeConnected(true);
-          // Register presence
+          // Register presence with auth info
           await channel.track({
             clientId: myClientId,
             role: isHost ? 'host' : 'guest',
             joinedAt: Date.now(),
+            userId: user?.id || null,
+            username: profile?.username || 'Tamu',
+            rating: profile?.rating_pvp || 1200,
           });
 
           if (!isHost) {
@@ -364,7 +416,7 @@ export default function RoomPage() {
     return () => {
       channel.unsubscribe();
     };
-  }, [roomId, isHost, chess, updateGameState, myClientId]);
+  }, [roomId, isHost, chess, updateGameState, myClientId, user, profile]);
 
   // Check if host is online for guest (invalid/expired room check)
   useEffect(() => {
@@ -821,6 +873,7 @@ export default function RoomPage() {
         onGoHome={() => router.push('/')}
         isOpen={showGameOverModal}
         onClose={() => setShowGameOverModal(false)}
+        ratingChange={ratingChange}
       />
     </>
   );
